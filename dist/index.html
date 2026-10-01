@@ -131,8 +131,6 @@
       let graph;
       let functionYMin = -5;
       let functionYMax = 5;
-      let pitchStartY = 0;
-      let pitchEndY = 1;
       const marker = board.create('point', [0, 0], {
         name: '', size: 4, fixed: true, strokeColor: '#111', fillColor: '#111', highlight: false,
         withLabel: false,
@@ -145,21 +143,12 @@
         } catch { return NaN; }
       }
 
-      function updatePitchBounds(fraction) {
-        pitchStartY = getY(xMin + fraction * (xMax - xMin));
-        pitchEndY = getY(xMax);
-        if (!Number.isFinite(pitchStartY) || !Number.isFinite(pitchEndY) || Math.abs(pitchEndY - pitchStartY) < 1e-9) {
-          pitchStartY = functionYMin;
-          pitchEndY = functionYMax;
-        }
-      }
-
       function frequencyForY(y) {
-        const pitchSpan = pitchEndY - pitchStartY;
-        const rawHz = Math.abs(pitchSpan) < 1e-9
-          ? (minHz + maxHz) / 2
-          : minHz + ((y - pitchStartY) / pitchSpan) * (maxHz - minHz);
-        return Math.min(maxHz, Math.max(minHz, rawHz));
+        const ySpan = functionYMax - functionYMin;
+        const normalizedY = Math.abs(ySpan) < 1e-9
+          ? 0.5
+          : Math.min(1, Math.max(0, (y - functionYMin) / ySpan));
+        return minHz * Math.pow(maxHz / minHz, normalizedY);
       }
 
       function setPosition(fraction, syncStart = true) {
@@ -261,7 +250,6 @@
           error.textContent = '';
           const startFraction = (startX - xMin) / (xMax - xMin);
           slider.value = String(startX);
-          updatePitchBounds(startFraction);
           setPosition(startFraction, false);
           board.update();
         } catch (err) {
@@ -292,7 +280,6 @@
         }
         slider.value = String(selectedX);
         const fraction = (selectedX - xMin) / (xMax - xMin);
-        updatePitchBounds(fraction);
         setPosition(fraction);
       });
 
@@ -365,7 +352,6 @@
         if (!Number.isFinite(x) || x < xMin || x > xMax) return;
         const fraction = (x - xMin) / (xMax - xMin);
         slider.value = String(x);
-        updatePitchBounds(fraction);
         setPosition(fraction, false);
       });
       startXInput.addEventListener('change', () => {
@@ -375,7 +361,6 @@
           const clampedX = Math.min(xMax, Math.max(xMin, x));
           const fraction = (clampedX - xMin) / (xMax - xMin);
           slider.value = String(clampedX);
-          updatePitchBounds(fraction);
           setPosition(fraction);
         }
       });
@@ -393,7 +378,6 @@
       slider.addEventListener('input', () => {
         stopSweep();
         const fraction = (Number(slider.value) - xMin) / (xMax - xMin);
-        updatePitchBounds(fraction);
         const point = setPosition(fraction);
         if (point && audioContext && audioContext.state === 'running') {
           oscillator.frequency.setTargetAtTime(point.hz, audioContext.currentTime, 0.035);
@@ -411,7 +395,6 @@
           const requestedStart = Number(startXInput.value);
           playStart = (Math.min(xMax, Math.max(xMin, requestedStart)) - xMin) / (xMax - xMin);
           slider.value = String(xMin + playStart * (xMax - xMin));
-          updatePitchBounds(playStart);
           const startPoint = setPosition(playStart);
           const durationSeconds = sweepDuration * (1 - playStart) / (1000 * sweepSpeed);
           const frequencyCurve = new Float32Array(4096);
