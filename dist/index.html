@@ -83,7 +83,7 @@
         </div>
       </section>
     </div>
-    <footer class="foot"><p>Each sweep maps its chosen start and end to 200–600 Hz. Soft sine tone; device volume still applies.</p></footer>
+    <footer class="foot"><p>Click the graph to choose a start; drag to pan and scroll to zoom. Each sweep maps its chosen start and end to 200–600 Hz. Soft sine tone; device volume still applies.</p></footer>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.13.3/distrib/jsxgraphcore.js"></script>
@@ -119,8 +119,8 @@
         axis: false,
         showCopyright: false,
         showNavigation: false,
-        pan: { enabled: false },
-        zoom: { enabled: false },
+        pan: { enabled: true, needShift: false },
+        zoom: { enabled: true, wheel: true, needShift: false },
         defaultAxes: { x: { strokeColor: '#555', highlight: false }, y: { strokeColor: '#555', highlight: false } },
         grid: { strokeColor: '#f0f0f0', strokeWidth: 1 },
       });
@@ -154,6 +154,14 @@
         }
       }
 
+      function frequencyForY(y) {
+        const pitchSpan = pitchEndY - pitchStartY;
+        const rawHz = Math.abs(pitchSpan) < 1e-9
+          ? (minHz + maxHz) / 2
+          : minHz + ((y - pitchStartY) / pitchSpan) * (maxHz - minHz);
+        return Math.min(maxHz, Math.max(minHz, rawHz));
+      }
+
       function setPosition(fraction, syncStart = true) {
         fraction = Math.min(1, Math.max(0, fraction));
         const x = xMin + fraction * (xMax - xMin);
@@ -165,11 +173,7 @@
           frequencyLabel.textContent = '—';
           return null;
         }
-        const pitchSpan = pitchEndY - pitchStartY;
-        const rawHz = Math.abs(pitchSpan) < 1e-9
-          ? (minHz + maxHz) / 2
-          : minHz + ((y - pitchStartY) / pitchSpan) * (maxHz - minHz);
-        const hz = Math.min(maxHz, Math.max(minHz, rawHz));
+        const hz = frequencyForY(y);
         marker.setAttribute({ visible: true });
         marker.moveTo([x, y]);
         xValue.textContent = x.toFixed(2);
@@ -265,6 +269,33 @@
         }
       }
 
+      let pointerDown;
+      board.on('down', event => {
+        if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+          pointerDown = [event.clientX, event.clientY];
+        }
+      });
+      board.on('up', event => {
+        if (!pointerDown || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return;
+        const moved = Math.hypot(event.clientX - pointerDown[0], event.clientY - pointerDown[1]);
+        pointerDown = null;
+        if (moved > 4) return;
+        const [graphX] = board.getUsrCoordsOfMouse(event);
+        const selectedX = Math.round(Math.max(xMin, graphX) * 100) / 100;
+        if (!Number.isFinite(selectedX)) return;
+        stopSweep();
+        startXInput.value = selectedX.toFixed(2);
+        if (selectedX > xMax) {
+          xMaxInput.value = (selectedX + 10).toFixed(2);
+          plot();
+          return;
+        }
+        slider.value = String(selectedX);
+        const fraction = (selectedX - xMin) / (xMax - xMin);
+        updatePitchBounds(fraction);
+        setPosition(fraction);
+      });
+
       let audioContext;
       let oscillator;
       let gain;
@@ -296,6 +327,7 @@
         animationFrame = 0;
         playButton.textContent = '▶ Play';
         playButton.setAttribute('aria-label', 'Play sound from left to right');
+        if (audioContext && oscillator) oscillator.frequency.cancelScheduledValues(audioContext.currentTime);
         if (audioContext && gain) gain.gain.setTargetAtTime(0, audioContext.currentTime, 0.035);
       }
 
@@ -306,12 +338,7 @@
         const position = playStart + (1 - playStart) * progress;
         const point = setPosition(position);
         slider.value = String(xMin + position * (xMax - xMin));
-        if (point && audioContext && gain) {
-          oscillator.frequency.setTargetAtTime(point.hz, audioContext.currentTime, 0.025);
-          gain.gain.setTargetAtTime(0.065, audioContext.currentTime, 0.035);
-        } else if (gain) {
-          gain.gain.setTargetAtTime(0, audioContext.currentTime, 0.035);
-        }
+        if (point && gain) gain.gain.setTargetAtTime(0.065, audioContext.currentTime, 0.01);
         if (progress < 1) animationFrame = requestAnimationFrame(animate);
         else stopSweep();
       }
@@ -380,12 +407,26 @@
         try {
           await startAudio();
           progress = 0;
-          previousFrame = 0;
+          previousFrame = performance.now();
           const requestedStart = Number(startXInput.value);
           playStart = (Math.min(xMax, Math.max(xMin, requestedStart)) - xMin) / (xMax - xMin);
           slider.value = String(xMin + playStart * (xMax - xMin));
           updatePitchBounds(playStart);
-          setPosition(playStart);
+          const startPoint = setPosition(playStart);
+          const durationSeconds = sweepDuration * (1 - playStart) / (1000 * sweepSpeed);
+          const frequencyCurve = new Float32Array(4096);
+          let lastHz = startPoint ? startPoint.hz : (minHz + maxHz) / 2;
+          for (let i = 0; i < frequencyCurve.length; i++) {
+            const fraction = playStart + (1 - playStart) * i / (frequencyCurve.length - 1);
+            const y = getY(xMin + fraction * (xMax - xMin));
+            if (Number.isFinite(y)) lastHz = frequencyForY(y);
+            frequencyCurve[i] = lastHz;
+          }
+          const audioNow = audioContext.currentTime;
+          oscillator.frequency.cancelScheduledValues(audioNow);
+          if (durationSeconds > 0.002) oscillator.frequency.setValueCurveAtTime(frequencyCurve, audioNow, durationSeconds);
+          else oscillator.frequency.setValueAtTime(frequencyCurve[frequencyCurve.length - 1], audioNow);
+          gain.gain.setTargetAtTime(0.065, audioNow, 0.01);
           playButton.textContent = 'Ⅱ Pause';
           playButton.setAttribute('aria-label', 'Pause sound sweep');
           animationFrame = requestAnimationFrame(animate);
