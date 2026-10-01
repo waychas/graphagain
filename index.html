@@ -64,9 +64,11 @@
         </form>
         <select id="examples" class="examples" aria-label="Choose a graph example">
           <option value="">Choose an example...</option>
-          <option value="sin(1.5 * x)">Ambulance siren</option>
-          <option value="sin(x^2 / 4)">Birdsong chirp</option>
-          <option value="sin(x / 2)">Ocean swell</option>
+          <option value="sin(1.5 * x)">Ambulance siren - wail</option>
+          <option value="sin(10 * x)">Ambulance siren - yelp</option>
+          <option value="sin(x) + 0.25 * sin(3 * x)">Birdsong phrase</option>
+          <option value="sin(x / 2) + x / 20">Whale/dolphin whistle</option>
+          <option value="-atan(3 * x)">Vehicle passing by (Doppler)</option>
         </select>
         <div class="error" id="error" role="status" aria-live="polite"></div>
         <div class="domain-controls" aria-label="Graph range">
