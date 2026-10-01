@@ -386,11 +386,20 @@
       });
       const speedInput = document.getElementById('speed');
       sweepSpeed = Number(speedInput.value);
+      function resetSweepStart() {
+        stopSweep();
+        startXInput.value = xMin.toFixed(2);
+        slider.value = String(xMin);
+        setPosition(0);
+      }
+      speedInput.addEventListener('focus', resetSweepStart);
       speedInput.addEventListener('input', () => {
+        resetSweepStart();
         const value = Number(speedInput.value);
         if (Number.isFinite(value) && value >= 0.5 && value <= 20) sweepSpeed = value;
       });
       speedInput.addEventListener('change', () => {
+        resetSweepStart();
         const value = Number(speedInput.value);
         sweepSpeed = Number.isFinite(value) ? Math.min(20, Math.max(0.5, value)) : sweepSpeed;
         speedInput.value = String(sweepSpeed);
