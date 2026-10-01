@@ -72,7 +72,7 @@
       <section class="chart-shell" aria-label="Interactive function graph and sound controls">
         <div id="board" role="img" aria-label="Interactive coordinate graph"></div>
         <div class="below-chart">
-          <div class="scrub"><span id="left-label">−10</span><input id="position" type="range" min="0" max="10000" value="5000" aria-label="Move along the graph"><span id="right-label">10</span></div>
+          <div class="scrub"><span id="left-label">−10</span><input id="position" type="range" min="-10" max="10" step="0.002" value="0" aria-label="Move along the graph"><span id="right-label">10</span></div>
           <label class="speed">Velocity<input id="speed" type="number" min="0.5" max="20" step="0.1" value="1" inputmode="decimal" aria-label="Sweep velocity multiplier"><span class="unit" aria-hidden="true">×</span></label>
           <button id="play" type="button" aria-label="Play sound from left to right">▶ Play</button>
         </div>
@@ -234,9 +234,12 @@
           });
           document.getElementById('left-label').textContent = String(Number(xMin.toFixed(2))).replace('-', '−');
           document.getElementById('right-label').textContent = String(Number(xMax.toFixed(2)));
+          slider.min = String(xMin);
+          slider.max = String(xMax);
+          slider.step = String((xMax - xMin) / 10000);
           error.textContent = '';
           const startFraction = (startX - xMin) / (xMax - xMin);
-          slider.value = String(Math.round(startFraction * Number(slider.max)));
+          slider.value = String(startX);
           updatePitchBounds(startFraction);
           setPosition(startFraction, false);
           board.update();
@@ -285,7 +288,7 @@
         progress = Math.min(1, progress);
         const position = playStart + (1 - playStart) * progress;
         const point = setPosition(position);
-        slider.value = String(Math.round(position * Number(slider.max)));
+        slider.value = String(xMin + position * (xMax - xMin));
         if (point && audioContext && gain) {
           oscillator.frequency.setTargetAtTime(point.hz, audioContext.currentTime, 0.025);
           gain.gain.setTargetAtTime(0.065, audioContext.currentTime, 0.035);
@@ -313,7 +316,7 @@
         const x = Number(startXInput.value);
         if (!Number.isFinite(x) || x < xMin || x > xMax) return;
         const fraction = (x - xMin) / (xMax - xMin);
-        slider.value = String(Math.round(fraction * Number(slider.max)));
+        slider.value = String(x);
         updatePitchBounds(fraction);
         setPosition(fraction, false);
       });
@@ -321,8 +324,9 @@
         const x = Number(startXInput.value);
         if (Number.isFinite(x)) {
           stopSweep();
-          const fraction = (Math.min(xMax, Math.max(xMin, x)) - xMin) / (xMax - xMin);
-          slider.value = String(Math.round(fraction * Number(slider.max)));
+          const clampedX = Math.min(xMax, Math.max(xMin, x));
+          const fraction = (clampedX - xMin) / (xMax - xMin);
+          slider.value = String(clampedX);
           updatePitchBounds(fraction);
           setPosition(fraction);
         }
@@ -340,7 +344,7 @@
       });
       slider.addEventListener('input', () => {
         stopSweep();
-        const fraction = Number(slider.value) / Number(slider.max);
+        const fraction = (Number(slider.value) - xMin) / (xMax - xMin);
         updatePitchBounds(fraction);
         const point = setPosition(fraction);
         if (point && audioContext && audioContext.state === 'running') {
@@ -358,7 +362,7 @@
           previousFrame = 0;
           const requestedStart = Number(startXInput.value);
           playStart = (Math.min(xMax, Math.max(xMin, requestedStart)) - xMin) / (xMax - xMin);
-          slider.value = String(Math.round(playStart * Number(slider.max)));
+          slider.value = String(xMin + playStart * (xMax - xMin));
           updatePitchBounds(playStart);
           setPosition(playStart);
           playButton.textContent = 'Ⅱ Pause';
