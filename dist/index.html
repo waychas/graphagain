@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f7f8">
   <meta name="description" content="Explore functions by listening to their shape. Plot an equation and hear its pitch as you travel across the graph.">
-  <title>Graph Tone</title>
+  <title>Graph Again</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23ffffff' stroke='%23dddddd'/%3E%3Cpath d='M7 25c5 0 6-11 12-11s7 12 14 12' fill='none' stroke='%23111111' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.13.3/distrib/jsxgraph.css">
   <style>
@@ -26,6 +26,7 @@
     button { border:1px solid var(--line); background:#fff; color:var(--text); border-radius:5px; padding:0 10px; min-height:38px; font:550 13px system-ui,sans-serif; cursor:pointer; }
     button:hover { background:#f5f5f5; }
     button:focus-visible,input:focus-visible { outline:2px solid var(--orange); outline-offset:3px; }
+    .examples { width:100%; margin-top:9px; padding:7px 8px; border:1px solid var(--line); border-radius:5px; background:#fff; color:var(--text); font:12px system-ui,sans-serif; }
     .plot-meta { margin:11px 2px; color:var(--muted); font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
     .domain-controls { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
     .domain-controls label { display:grid; gap:4px; color:var(--muted); font-size:11px; }
@@ -54,13 +55,19 @@
 </head>
 <body>
   <main>
-    <header><div class="brand">Graph Tone</div></header>
+    <header><div class="brand">Graph Again</div></header>
     <div class="workspace">
       <aside class="expression-panel" aria-label="Expressions">
         <form class="expression-row" id="form">
           <label class="equation-wrap"><span class="y-label">y =</span><input id="equation" aria-label="Function of x" autocomplete="off" spellcheck="false" value="x" placeholder="sin(x) + x / 4"></label>
           <button id="apply" type="submit" aria-label="Plot function">↵</button>
         </form>
+        <select id="examples" class="examples" aria-label="Choose a graph example">
+          <option value="">Choose an example...</option>
+          <option value="sin(1.5 * x)">Ambulance siren</option>
+          <option value="sin(x^2 / 4)">Birdsong chirp</option>
+          <option value="sin(x / 2)">Ocean swell</option>
+        </select>
         <div class="error" id="error" role="status" aria-live="polite"></div>
         <div class="domain-controls" aria-label="Graph range">
           <label>X from<input id="x-min" type="number" value="-10" step="0.1" aria-label="Left X endpoint"></label>
@@ -83,7 +90,7 @@
         </div>
       </section>
     </div>
-    <footer class="foot"><p>Click the graph to choose a start; drag to pan and scroll to zoom. Each sweep maps its chosen start and end to 200–600 Hz. Soft sine tone; device volume still applies.</p></footer>
+    <footer class="foot"><p>Click the graph to choose a start; drag to pan and scroll to zoom. Y maps across 200–600 Hz. Soft sine tone; device volume still applies.</p></footer>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.13.3/distrib/jsxgraphcore.js"></script>
@@ -97,6 +104,7 @@
       const minHz = 200;
       const maxHz = 600;
       const equationInput = document.getElementById('equation');
+      const examplesInput = document.getElementById('examples');
       const error = document.getElementById('error');
       const slider = document.getElementById('position');
       const playButton = document.getElementById('play');
@@ -339,10 +347,20 @@
       let plotTimer;
       equationInput.addEventListener('input', () => {
         stopSweep();
+        examplesInput.value = '';
         startXInput.value = xMin.toFixed(2);
         slider.value = String(xMin);
         window.clearTimeout(plotTimer);
         plotTimer = window.setTimeout(plot, 220);
+      });
+      examplesInput.addEventListener('change', () => {
+        if (!examplesInput.value) return;
+        stopSweep();
+        equationInput.value = examplesInput.value;
+        startXInput.value = xMin.toFixed(2);
+        slider.value = String(xMin);
+        window.clearTimeout(plotTimer);
+        plot();
       });
       xMinInput.addEventListener('change', plot);
       xMaxInput.addEventListener('change', plot);
