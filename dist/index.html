@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f8">
+  <meta name="description" content="Explore functions by listening to their shape. Plot an equation and hear its pitch as you travel across the graph.">
+  <title>Graph Tone</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23ffffff' stroke='%23dddddd'/%3E%3Cpath d='M7 25c5 0 6-11 12-11s7 12 14 12' fill='none' stroke='%23111111' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.13.3/distrib/jsxgraph.css">
+  <style>
+    :root { color-scheme:light; --bg:#fff; --panel:#fff; --line:#dedede; --muted:#666; --text:#111; --blue:#111; --orange:#333; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { width:min(1200px,100% - 32px); margin:0 auto; padding:17px 0 28px; }
+    header { display:flex; align-items:center; height:34px; margin-bottom:12px; }
+    .brand { font-weight:650; letter-spacing:-.02em; }
+    .workspace { display:grid; grid-template-columns:230px minmax(0,1fr); gap:12px; min-height:600px; }
+    .expression-panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+    .expression-row { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
+    .equation-wrap { background:#fff; border:1px solid var(--line); border-left:3px solid var(--blue); border-radius:5px; display:flex; align-items:center; gap:7px; padding:0 8px; min-width:0; }
+    .y-label { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--blue); font-size:15px; white-space:nowrap; }
+    input { font:inherit; color:var(--text); }
+    #equation { width:100%; min-width:0; padding:9px 0; background:transparent; border:0; outline:0; font:15px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    #equation:focus-visible { outline:0; }
+    button { border:1px solid var(--line); background:#fff; color:var(--text); border-radius:5px; padding:0 10px; min-height:38px; font:550 13px system-ui,sans-serif; cursor:pointer; }
+    button:hover { background:#f5f5f5; }
+    button:focus-visible,input:focus-visible { outline:2px solid var(--orange); outline-offset:3px; }
+    .plot-meta { margin:11px 2px; color:var(--muted); font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .domain-controls { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+    .domain-controls label { display:grid; gap:4px; color:var(--muted); font-size:11px; }
+    .domain-controls input { width:100%; min-width:0; padding:6px 7px; border:1px solid var(--line); border-radius:4px; background:#fff; font:13px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .domain-controls .start-control { grid-column:1 / -1; }
+    .error { color:#b23b2b; min-height:1.4em; padding:6px 2px 0; font-size:12px; }
+    .chart-shell { background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px; overflow:hidden; }
+    #board { width:100%; height:min(68vh,610px); min-height:340px; border:0; border-radius:4px; background:#fff; touch-action:none; }
+    .JXGtext { color:#66747a!important; }
+    .below-chart { display:grid; grid-template-columns:minmax(180px,1fr) minmax(145px,200px) auto; align-items:center; gap:15px; padding:9px 8px 6px; border-top:1px solid #ededed; }
+    .scrub { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    input[type=range] { width:100%; accent-color:#111; cursor:pointer; }
+    .speed { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
+    .speed output { min-width:26px; color:var(--text); text-align:right; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    #play { min-height:34px; white-space:nowrap; }
+    .readout { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:8px; }
+    .value { color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .value strong { color:var(--text); font-weight:550; }
+    .pitch { color:var(--blue); }
+    .foot { margin-top:8px; color:var(--muted); font-size:11px; }
+    .foot p { margin:0; }
+    @media(max-width:700px) { main{width:calc(100% - 20px);padding-top:10px}.workspace{grid-template-columns:1fr;gap:8px;min-height:0}.expression-panel{padding:8px}.plot-meta{display:none}#board{height:58vh;min-height:280px}.below-chart{grid-template-columns:1fr auto;gap:9px;padding:9px 4px}.scrub{grid-column:1/-1}.speed{grid-column:1}#play{grid-column:2;grid-row:2}.readout{padding:7px 4px}.foot{line-height:1.4} }
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <main>
+    <header><div class="brand">Graph Tone</div></header>
+    <div class="workspace">
+      <aside class="expression-panel" aria-label="Expressions">
+        <form class="expression-row" id="form">
+          <label class="equation-wrap"><span class="y-label">y =</span><input id="equation" aria-label="Function of x" autocomplete="off" spellcheck="false" value="x" placeholder="sin(x) + x / 4"></label>
+          <button id="apply" type="submit" aria-label="Plot function">↵</button>
+        </form>
+        <div class="error" id="error" role="status" aria-live="polite"></div>
+        <div class="domain-controls" aria-label="Graph range">
+          <label>X from<input id="x-min" type="number" value="-10" step="0.1" aria-label="Left X endpoint"></label>
+          <label>X to<input id="x-max" type="number" value="10" step="0.1" aria-label="Right X endpoint"></label>
+          <label class="start-control">Start at x<input id="start-x" type="number" value="0" step="0.1" aria-label="Starting X value"></label>
+        </div>
+        <div class="plot-meta">Pitch range: 220–880 Hz</div>
+      </aside>
+      <section class="chart-shell" aria-label="Interactive function graph and sound controls">
+        <div id="board" role="img" aria-label="Interactive coordinate graph"></div>
+        <div class="below-chart">
+          <div class="scrub"><span id="left-label">−10</span><input id="position" type="range" min="0" max="1000" value="500" aria-label="Move along the graph"><span id="right-label">10</span></div>
+          <label class="speed">Speed<input id="speed" type="range" min="0.5" max="20" step="0.5" value="1" aria-label="Sweep speed"><output id="speed-value" for="speed">1×</output></label>
+          <button id="play" type="button" aria-label="Play sound from left to right">▶ Play</button>
+        </div>
+        <div class="readout" aria-live="polite">
+          <span class="value">x <strong id="x-value">0.00</strong></span>
+          <span class="value">y <strong id="y-value">0.00</strong></span>
+          <span class="value pitch">PITCH <strong id="frequency">550 Hz</strong></span>
+        </div>
+      </section>
+    </div>
+    <footer class="foot"><p>Pitch maps to the visible y-range (220–880 Hz). Soft sine tone; device volume still applies.</p></footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.13.3/distrib/jsxgraphcore.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/14.8.1/math.min.js"></script>
+  <script>
+    (() => {
+      let xMin = -10;
+      let xMax = 10;
+      const yMin = -5;
+      const yMax = 5;
+      const minHz = 220;
+      const maxHz = 880;
+      const equationInput = document.getElementById('equation');
+      const error = document.getElementById('error');
+      const slider = document.getElementById('position');
+      const playButton = document.getElementById('play');
+      const xValue = document.getElementById('x-value');
+      const yValue = document.getElementById('y-value');
+      const frequencyLabel = document.getElementById('frequency');
+      const xMinInput = document.getElementById('x-min');
+      const xMaxInput = document.getElementById('x-max');
+      const startXInput = document.getElementById('start-x');
+
+      if (!window.JXG || !window.math) {
+        error.textContent = 'The graphing tools could not load. Check your connection and refresh the page.';
+        document.getElementById('apply').disabled = true;
+        playButton.disabled = true;
+        return;
+      }
+
+      const board = JXG.JSXGraph.initBoard('board', {
+        boundingbox: [xMin, yMax, xMax, yMin],
+        axis: false,
+        showCopyright: false,
+        showNavigation: false,
+        pan: { enabled: false },
+        zoom: { enabled: false },
+        defaultAxes: { x: { strokeColor: '#555', highlight: false }, y: { strokeColor: '#555', highlight: false } },
+        grid: { strokeColor: '#f0f0f0', strokeWidth: 1 },
+      });
+      board.create('axis', [[0, 0], [1, 0]], { strokeColor: '#555', highlight: false, ticks: { drawLabels: true, majorHeight: 0, minorTicks: 0, strokeColor: '#ddd', label: { fontSize: 11, color: '#555' } } });
+      board.create('axis', [[0, 0], [0, 1]], { strokeColor: '#555', highlight: false, ticks: { drawLabels: true, majorHeight: 0, minorTicks: 0, strokeColor: '#ddd', label: { fontSize: 11, color: '#555' } } });
+
+      let expression;
+      let graph;
+      const marker = board.create('point', [0, 0], {
+        name: '', size: 4, fixed: true, strokeColor: '#111', fillColor: '#111', highlight: false,
+        withLabel: false,
+      });
+
+      function getY(x) {
+        try {
+          const value = Number(expression.evaluate({ x }));
+          return Number.isFinite(value) ? value : NaN;
+        } catch { return NaN; }
+      }
+
+      function setPosition(fraction, syncStart = true) {
+        fraction = Math.min(1, Math.max(0, fraction));
+        const x = xMin + fraction * (xMax - xMin);
+        const y = getY(x);
+        if (!Number.isFinite(y)) {
+          marker.setAttribute({ visible: false });
+          xValue.textContent = x.toFixed(2);
+          yValue.textContent = 'undefined';
+          frequencyLabel.textContent = '—';
+          return null;
+        }
+        const boundedY = Math.min(yMax, Math.max(yMin, y));
+        const hz = minHz + ((boundedY - yMin) / (yMax - yMin)) * (maxHz - minHz);
+        marker.setAttribute({ visible: true });
+        marker.moveTo([x, y]);
+        xValue.textContent = x.toFixed(2);
+        yValue.textContent = y.toFixed(2);
+        frequencyLabel.textContent = `${Math.round(hz)} Hz`;
+        if (syncStart) startXInput.value = x.toFixed(2);
+        return { x, y, hz };
+      }
+
+      function plot() {
+        try {
+          const nextXMin = Number(xMinInput.value);
+          const nextXMax = Number(xMaxInput.value);
+          if (!Number.isFinite(nextXMin) || !Number.isFinite(nextXMax) || nextXMax <= nextXMin) {
+            throw new Error('Set an X max greater than X min.');
+          }
+          const requestedStart = Number(startXInput.value);
+          if (!Number.isFinite(requestedStart)) throw new Error('Enter a starting X value.');
+          xMin = nextXMin;
+          xMax = nextXMax;
+          const startX = Math.min(xMax, Math.max(xMin, requestedStart));
+          startXInput.value = startX.toFixed(2);
+          const input = equationInput.value.trim().replace(/^y\s*=\s*/i, '');
+          if (!input) throw new Error('Enter a function of x, like x^2 or sin(x).');
+          const compiled = math.compile(input);
+          const samples = [0, 0.25, 0.5, 0.75, 1].map(fraction => Number(compiled.evaluate({ x: xMin + fraction * (xMax - xMin) })));
+          if (samples.every(value => !Number.isFinite(value))) throw new Error('This expression is not real-valued across the current X range.');
+          expression = compiled;
+          if (graph) board.removeObject(graph);
+          board.setBoundingBox([xMin, yMax, xMax, yMin], false);
+          graph = board.create('functiongraph', [getY, xMin, xMax], {
+            strokeColor: '#111', strokeWidth: 3, highlight: false, numberPointsHigh: 800,
+          });
+          error.textContent = '';
+          slider.value = String(Math.round(((startX - xMin) / (xMax - xMin)) * Number(slider.max)));
+          setPosition(Number(slider.value) / Number(slider.max));
+          board.update();
+        } catch (err) {
+          error.textContent = err && err.message ? err.message : 'Could not plot this expression.';
+        }
+      }
+
+      let audioContext;
+      let oscillator;
+      let gain;
+      let animationFrame;
+      let progress = 0;
+      let previousFrame = 0;
+      let sweepSpeed = 1;
+      let playStart = 0;
+      const sweepDuration = 10000;
+
+      async function startAudio() {
+        if (!audioContext) {
+          audioContext = new AudioContext();
+          oscillator = audioContext.createOscillator();
+          gain = audioContext.createGain();
+          oscillator.type = 'sine';
+          oscillator.frequency.value = minHz;
+          gain.gain.value = 0;
+          oscillator.connect(gain).connect(audioContext.destination);
+          oscillator.start();
+        }
+        await audioContext.resume();
+      }
+
+      function stopSweep() {
+        cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+        playButton.textContent = '▶  Play sweep';
+        playButton.setAttribute('aria-label', 'Play sound from left to right');
+        if (audioContext && gain) gain.gain.setTargetAtTime(0, audioContext.currentTime, 0.035);
+      }
+
+      async function animate(now) {
+        if (previousFrame) progress += (now - previousFrame) * sweepSpeed / sweepDuration;
+        previousFrame = now;
+        progress = Math.min(1, progress);
+        const position = playStart + (1 - playStart) * progress;
+        const point = setPosition(position);
+        slider.value = String(Math.round(position * Number(slider.max)));
+        if (point && audioContext && gain) {
+          oscillator.frequency.setTargetAtTime(point.hz, audioContext.currentTime, 0.025);
+          gain.gain.setTargetAtTime(0.065, audioContext.currentTime, 0.035);
+        } else if (gain) {
+          gain.gain.setTargetAtTime(0, audioContext.currentTime, 0.035);
+        }
+        if (progress < 1) animationFrame = requestAnimationFrame(animate);
+        else stopSweep();
+      }
+
+      document.getElementById('form').addEventListener('submit', event => {
+        event.preventDefault();
+        stopSweep();
+        plot();
+      });
+      let plotTimer;
+      equationInput.addEventListener('input', () => {
+        window.clearTimeout(plotTimer);
+        plotTimer = window.setTimeout(plot, 220);
+      });
+      xMinInput.addEventListener('change', plot);
+      xMaxInput.addEventListener('change', plot);
+      startXInput.addEventListener('input', () => {
+        const x = Number(startXInput.value);
+        if (!Number.isFinite(x) || x < xMin || x > xMax) return;
+        const fraction = (x - xMin) / (xMax - xMin);
+        slider.value = String(Math.round(fraction * Number(slider.max)));
+        setPosition(fraction, false);
+      });
+      startXInput.addEventListener('change', () => {
+        const x = Number(startXInput.value);
+        if (Number.isFinite(x)) setPosition((Math.min(xMax, Math.max(xMin, x)) - xMin) / (xMax - xMin));
+      });
+      const speedInput = document.getElementById('speed');
+      const speedValue = document.getElementById('speed-value');
+      speedInput.addEventListener('input', () => {
+        sweepSpeed = Number(speedInput.value);
+        speedValue.value = `${sweepSpeed}×`;
+        speedValue.textContent = `${sweepSpeed}×`;
+      });
+      slider.addEventListener('input', () => {
+        stopSweep();
+        const point = setPosition(Number(slider.value) / Number(slider.max));
+        if (point && audioContext && audioContext.state === 'running') {
+          oscillator.frequency.setTargetAtTime(point.hz, audioContext.currentTime, 0.035);
+          gain.gain.setTargetAtTime(0.035, audioContext.currentTime, 0.035);
+          window.clearTimeout(slider.soundTimeout);
+          slider.soundTimeout = window.setTimeout(() => gain.gain.setTargetAtTime(0, audioContext.currentTime, 0.04), 100);
+        }
+      });
+      playButton.addEventListener('click', async () => {
+        if (animationFrame) { stopSweep(); return; }
+        try {
+          await startAudio();
+          progress = 0;
+          previousFrame = 0;
+          playStart = Number(slider.value) / Number(slider.max);
+          playButton.textContent = 'Ⅱ Pause';
+          playButton.setAttribute('aria-label', 'Pause sound sweep');
+          animationFrame = requestAnimationFrame(animate);
+        } catch {
+          error.textContent = 'Audio could not start. Try tapping Play again.';
+        }
+      });
+      board.on('down', event => {
+        const [x] = board.getUsrCoordsOfMouse(event);
+        if (x < xMin || x > xMax) return;
+        const fraction = (x - xMin) / (xMax - xMin);
+        slider.value = String(Math.round(fraction * Number(slider.max)));
+        setPosition(fraction);
+      });
+      window.addEventListener('resize', () => board.resizeContainer(board.containerObj.clientWidth, board.containerObj.clientHeight, true));
+
+      plot();
+    })();
+  </script>
+</body>
+</html>
