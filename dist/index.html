@@ -38,8 +38,9 @@
     .below-chart { display:grid; grid-template-columns:minmax(180px,1fr) minmax(145px,200px) auto; align-items:center; gap:15px; padding:9px 8px 6px; border-top:1px solid #ededed; }
     .scrub { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
     input[type=range] { width:100%; accent-color:#111; cursor:pointer; }
-    .speed { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
-    .speed output { min-width:26px; color:var(--text); text-align:right; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .speed { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .speed input { width:66px; padding:6px 7px; border:1px solid var(--line); border-radius:4px; background:#fff; color:var(--text); font:13px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .speed .unit { color:var(--text); }
     #play { min-height:34px; white-space:nowrap; }
     .readout { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:8px; }
     .value { color:var(--muted); font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
@@ -66,23 +67,23 @@
           <label>X to<input id="x-max" type="number" value="10" step="0.1" aria-label="Right X endpoint"></label>
           <label class="start-control">Start at x<input id="start-x" type="number" value="0" step="0.1" aria-label="Starting X value"></label>
         </div>
-        <div class="plot-meta">Pitch range: 220–880 Hz</div>
+        <div class="plot-meta">Pitch per sweep: 200–600 Hz</div>
       </aside>
       <section class="chart-shell" aria-label="Interactive function graph and sound controls">
         <div id="board" role="img" aria-label="Interactive coordinate graph"></div>
         <div class="below-chart">
-          <div class="scrub"><span id="left-label">−10</span><input id="position" type="range" min="0" max="1000" value="500" aria-label="Move along the graph"><span id="right-label">10</span></div>
-          <label class="speed">Speed<input id="speed" type="range" min="0.5" max="20" step="0.5" value="1" aria-label="Sweep speed"><output id="speed-value" for="speed">1×</output></label>
+          <div class="scrub"><span id="left-label">−10</span><input id="position" type="range" min="0" max="10000" value="5000" aria-label="Move along the graph"><span id="right-label">10</span></div>
+          <label class="speed">Velocity<input id="speed" type="number" min="0.5" max="20" step="0.1" value="1" inputmode="decimal" aria-label="Sweep velocity multiplier"><span class="unit" aria-hidden="true">×</span></label>
           <button id="play" type="button" aria-label="Play sound from left to right">▶ Play</button>
         </div>
         <div class="readout" aria-live="polite">
           <span class="value">x <strong id="x-value">0.00</strong></span>
           <span class="value">y <strong id="y-value">0.00</strong></span>
-          <span class="value pitch">PITCH <strong id="frequency">550 Hz</strong></span>
+          <span class="value pitch">PITCH <strong id="frequency">200 Hz</strong></span>
         </div>
       </section>
     </div>
-    <footer class="foot"><p>Pitch maps to the visible y-range (220–880 Hz). Soft sine tone; device volume still applies.</p></footer>
+    <footer class="foot"><p>Each sweep maps its chosen start and end to 200–600 Hz. Soft sine tone; device volume still applies.</p></footer>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.13.3/distrib/jsxgraphcore.js"></script>
@@ -91,10 +92,10 @@
     (() => {
       let xMin = -10;
       let xMax = 10;
-      const yMin = -5;
-      const yMax = 5;
-      const minHz = 220;
-      const maxHz = 880;
+      let plotYMin = -5;
+      let plotYMax = 5;
+      const minHz = 200;
+      const maxHz = 600;
       const equationInput = document.getElementById('equation');
       const error = document.getElementById('error');
       const slider = document.getElementById('position');
@@ -114,7 +115,7 @@
       }
 
       const board = JXG.JSXGraph.initBoard('board', {
-        boundingbox: [xMin, yMax, xMax, yMin],
+        boundingbox: [xMin, plotYMax, xMax, plotYMin],
         axis: false,
         showCopyright: false,
         showNavigation: false,
@@ -128,6 +129,10 @@
 
       let expression;
       let graph;
+      let functionYMin = -5;
+      let functionYMax = 5;
+      let pitchStartY = 0;
+      let pitchEndY = 1;
       const marker = board.create('point', [0, 0], {
         name: '', size: 4, fixed: true, strokeColor: '#111', fillColor: '#111', highlight: false,
         withLabel: false,
@@ -138,6 +143,15 @@
           const value = Number(expression.evaluate({ x }));
           return Number.isFinite(value) ? value : NaN;
         } catch { return NaN; }
+      }
+
+      function updatePitchBounds(fraction) {
+        pitchStartY = getY(xMin + fraction * (xMax - xMin));
+        pitchEndY = getY(xMax);
+        if (!Number.isFinite(pitchStartY) || !Number.isFinite(pitchEndY) || Math.abs(pitchEndY - pitchStartY) < 1e-9) {
+          pitchStartY = functionYMin;
+          pitchEndY = functionYMax;
+        }
       }
 
       function setPosition(fraction, syncStart = true) {
@@ -151,8 +165,11 @@
           frequencyLabel.textContent = '—';
           return null;
         }
-        const boundedY = Math.min(yMax, Math.max(yMin, y));
-        const hz = minHz + ((boundedY - yMin) / (yMax - yMin)) * (maxHz - minHz);
+        const pitchSpan = pitchEndY - pitchStartY;
+        const rawHz = Math.abs(pitchSpan) < 1e-9
+          ? (minHz + maxHz) / 2
+          : minHz + ((y - pitchStartY) / pitchSpan) * (maxHz - minHz);
+        const hz = Math.min(maxHz, Math.max(minHz, rawHz));
         marker.setAttribute({ visible: true });
         marker.moveTo([x, y]);
         xValue.textContent = x.toFixed(2);
@@ -164,6 +181,7 @@
 
       function plot() {
         try {
+          stopSweep();
           const nextXMin = Number(xMinInput.value);
           const nextXMax = Number(xMaxInput.value);
           if (!Number.isFinite(nextXMin) || !Number.isFinite(nextXMax) || nextXMax <= nextXMin) {
@@ -178,17 +196,49 @@
           const input = equationInput.value.trim().replace(/^y\s*=\s*/i, '');
           if (!input) throw new Error('Enter a function of x, like x^2 or sin(x).');
           const compiled = math.compile(input);
-          const samples = [0, 0.25, 0.5, 0.75, 1].map(fraction => Number(compiled.evaluate({ x: xMin + fraction * (xMax - xMin) })));
-          if (samples.every(value => !Number.isFinite(value))) throw new Error('This expression is not real-valued across the current X range.');
           expression = compiled;
+          const samples = [];
+          for (let i = 0; i <= 600; i++) {
+            const x = xMin + (i / 600) * (xMax - xMin);
+            const y = getY(x);
+            if (Number.isFinite(y)) samples.push(y);
+          }
+          if (!samples.length) throw new Error('This expression is not real-valued across the current X range.');
+          const minY = Math.min(...samples);
+          const maxY = Math.max(...samples);
+          functionYMin = minY;
+          functionYMax = maxY;
+          const yPadding = Math.max(maxY - minY, Math.abs(minY) * 0.1, Math.abs(maxY) * 0.1, 1) * 0.08;
+          plotYMin = minY - yPadding;
+          plotYMax = maxY + yPadding;
           if (graph) board.removeObject(graph);
-          board.setBoundingBox([xMin, yMax, xMax, yMin], false);
+          let viewXMin = xMin;
+          let viewXMax = xMax;
+          const xSpan = xMax - xMin;
+          const ySpan = plotYMax - plotYMin;
+          const aspect = board.containerObj.clientWidth / board.containerObj.clientHeight;
+          if (xSpan / ySpan < aspect) {
+            const expandedXSpan = ySpan * aspect;
+            const padding = (expandedXSpan - xSpan) / 2;
+            viewXMin -= padding;
+            viewXMax += padding;
+          } else if (xSpan / ySpan > aspect) {
+            const expandedYSpan = xSpan / aspect;
+            const padding = (expandedYSpan - ySpan) / 2;
+            plotYMin -= padding;
+            plotYMax += padding;
+          }
+          board.setBoundingBox([viewXMin, plotYMax, viewXMax, plotYMin], true);
           graph = board.create('functiongraph', [getY, xMin, xMax], {
-            strokeColor: '#111', strokeWidth: 3, highlight: false, numberPointsHigh: 800,
+            strokeColor: '#111', strokeWidth: 3, highlight: false, numberPointsHigh: 1200,
           });
+          document.getElementById('left-label').textContent = String(Number(xMin.toFixed(2))).replace('-', '−');
+          document.getElementById('right-label').textContent = String(Number(xMax.toFixed(2)));
           error.textContent = '';
-          slider.value = String(Math.round(((startX - xMin) / (xMax - xMin)) * Number(slider.max)));
-          setPosition(Number(slider.value) / Number(slider.max));
+          const startFraction = (startX - xMin) / (xMax - xMin);
+          slider.value = String(Math.round(startFraction * Number(slider.max)));
+          updatePitchBounds(startFraction);
+          setPosition(startFraction, false);
           board.update();
         } catch (err) {
           error.textContent = err && err.message ? err.message : 'Could not plot this expression.';
@@ -207,7 +257,9 @@
 
       async function startAudio() {
         if (!audioContext) {
-          audioContext = new AudioContext();
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) throw new Error('Audio is not supported in this browser.');
+          audioContext = new AudioContextClass();
           oscillator = audioContext.createOscillator();
           gain = audioContext.createGain();
           oscillator.type = 'sine';
@@ -222,7 +274,7 @@
       function stopSweep() {
         cancelAnimationFrame(animationFrame);
         animationFrame = 0;
-        playButton.textContent = '▶  Play sweep';
+        playButton.textContent = '▶ Play';
         playButton.setAttribute('aria-label', 'Play sound from left to right');
         if (audioContext && gain) gain.gain.setTargetAtTime(0, audioContext.currentTime, 0.035);
       }
@@ -257,26 +309,40 @@
       xMinInput.addEventListener('change', plot);
       xMaxInput.addEventListener('change', plot);
       startXInput.addEventListener('input', () => {
+        stopSweep();
         const x = Number(startXInput.value);
         if (!Number.isFinite(x) || x < xMin || x > xMax) return;
         const fraction = (x - xMin) / (xMax - xMin);
         slider.value = String(Math.round(fraction * Number(slider.max)));
+        updatePitchBounds(fraction);
         setPosition(fraction, false);
       });
       startXInput.addEventListener('change', () => {
         const x = Number(startXInput.value);
-        if (Number.isFinite(x)) setPosition((Math.min(xMax, Math.max(xMin, x)) - xMin) / (xMax - xMin));
+        if (Number.isFinite(x)) {
+          stopSweep();
+          const fraction = (Math.min(xMax, Math.max(xMin, x)) - xMin) / (xMax - xMin);
+          slider.value = String(Math.round(fraction * Number(slider.max)));
+          updatePitchBounds(fraction);
+          setPosition(fraction);
+        }
       });
       const speedInput = document.getElementById('speed');
-      const speedValue = document.getElementById('speed-value');
+      sweepSpeed = Number(speedInput.value);
       speedInput.addEventListener('input', () => {
-        sweepSpeed = Number(speedInput.value);
-        speedValue.value = `${sweepSpeed}×`;
-        speedValue.textContent = `${sweepSpeed}×`;
+        const value = Number(speedInput.value);
+        if (Number.isFinite(value) && value >= 0.5 && value <= 20) sweepSpeed = value;
+      });
+      speedInput.addEventListener('change', () => {
+        const value = Number(speedInput.value);
+        sweepSpeed = Number.isFinite(value) ? Math.min(20, Math.max(0.5, value)) : sweepSpeed;
+        speedInput.value = String(sweepSpeed);
       });
       slider.addEventListener('input', () => {
         stopSweep();
-        const point = setPosition(Number(slider.value) / Number(slider.max));
+        const fraction = Number(slider.value) / Number(slider.max);
+        updatePitchBounds(fraction);
+        const point = setPosition(fraction);
         if (point && audioContext && audioContext.state === 'running') {
           oscillator.frequency.setTargetAtTime(point.hz, audioContext.currentTime, 0.035);
           gain.gain.setTargetAtTime(0.035, audioContext.currentTime, 0.035);
@@ -290,7 +356,11 @@
           await startAudio();
           progress = 0;
           previousFrame = 0;
-          playStart = Number(slider.value) / Number(slider.max);
+          const requestedStart = Number(startXInput.value);
+          playStart = (Math.min(xMax, Math.max(xMin, requestedStart)) - xMin) / (xMax - xMin);
+          slider.value = String(Math.round(playStart * Number(slider.max)));
+          updatePitchBounds(playStart);
+          setPosition(playStart);
           playButton.textContent = 'Ⅱ Pause';
           playButton.setAttribute('aria-label', 'Pause sound sweep');
           animationFrame = requestAnimationFrame(animate);
@@ -298,14 +368,10 @@
           error.textContent = 'Audio could not start. Try tapping Play again.';
         }
       });
-      board.on('down', event => {
-        const [x] = board.getUsrCoordsOfMouse(event);
-        if (x < xMin || x > xMax) return;
-        const fraction = (x - xMin) / (xMax - xMin);
-        slider.value = String(Math.round(fraction * Number(slider.max)));
-        setPosition(fraction);
+      window.addEventListener('resize', () => {
+        board.resizeContainer(board.containerObj.clientWidth, board.containerObj.clientHeight, true);
+        plot();
       });
-      window.addEventListener('resize', () => board.resizeContainer(board.containerObj.clientWidth, board.containerObj.clientHeight, true));
 
       plot();
     })();
